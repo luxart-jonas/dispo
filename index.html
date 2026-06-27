@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Dispo — Terra X maiBody 699</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --border: rgba(255,255,255,.08);
+    --border-strong: rgba(255,255,255,.15);
+    --text: #f0f0f0;
+    --text-muted: #888;
+    --text-dim: #555;
+    --accent: #e8a838;
+    --accent-bg: rgba(232,168,56,.12);
+    --accent-border: rgba(232,168,56,.3);
+    --warn: #e05050;
+    --warn-bg: rgba(224,80,80,.12);
+    --warn-border: rgba(224,80,80,.3);
+    --ok: #4caf7d;
+    --ok-bg: rgba(76,175,125,.12);
+    --ok-border: rgba(76,175,125,.3);
+    --today: rgba(232,168,56,.07);
+    --today-border: rgba(232,168,56,.5);
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100dvh; }
+
+  /* HEADER */
+  .app-header {
+    position: sticky; top: 0; z-index: 30;
+    background: rgba(15,15,15,.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid var(--border);
+    padding: 14px 16px 0;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .header-brand { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+  .header-title { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -.02em; }
+  .header-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    height: 34px; padding: 0 12px; border-radius: 8px;
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer; font-size: 14px; white-space: nowrap;
+  }
+  .icon-btn span { font-size: 12px; }
+  .icon-btn:active { opacity: .7; }
+  .icon-btn.danger { border-color: var(--warn-border); color: var(--warn); }
+
+  /* TABS */
+  .dispo-tabs {
+    display: flex; gap: 0; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dispo-tabs::-webkit-scrollbar { display: none; }
+  .tab-group { display: flex; align-items: stretch; flex-shrink: 0; }
+  .tab {
+    padding: 8px 14px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    cursor: pointer; white-space: nowrap;
+    transition: color .15s, border-color .15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-actions { display: flex; align-items: center; gap: 0; border-bottom: 2px solid transparent; }
+  .tab-btn {
+    padding: 4px 8px; font-size: 14px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); line-height: 1;
+    display: flex; align-items: center;
+  }
+  .tab-btn:active { opacity: .6; }
+  .tab-btn.del { color: var(--warn); opacity: .6; }
+  .tab-btn.del:active { opacity: 1; }
+  .tab-sep { width: 0.5px; background: var(--border); margin: 8px 0 10px; }
+
+  /* MAIN */
+  .main { padding: 12px 12px 100px; }
+
+  /* DAY CARD */
+  .day-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .day-card.today {
+    border-color: var(--today-border);
+    background: var(--today);
+  }
+
+  .day-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .day-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border-strong); flex-shrink: 0;
+  }
+  .today .day-dot { background: var(--accent); }
+  .day-header-text { flex: 1; min-width: 0; }
+  .day-date { font-size: 14px; font-weight: 600; color: var(--text); }
+  .day-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .today-pill {
+    font-size: 10px; font-weight: 600;
+    background: var(--accent); color: #000;
+    padding: 2px 8px; border-radius: 20px;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .chevron {
+    color: var(--text-dim); font-size: 18px;
+    transition: transform .2s; flex-shrink: 0;
+  }
+  .chevron.open { transform: rotate(180deg); }
+
+  /* DAY BODY */
+  .day-body { display: none; border-top: 0.5px solid var(--border); }
+  .day-body.open { display: block; }
+
+  .section { padding: 12px 14px; border-bottom: 0.5px solid var(--border); }
+  .section:last-child { border-bottom: none; }
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  /* LOCATION / HOTEL ROW */
+  .place-row { display: flex; gap: 10px; align-items: flex-start; }
+  .place-icon { font-size: 18px; flex-shrink: 0; margin-top: 0; }
+  .place-name { font-size: 13px; color: var(--text); line-height: 1.4; }
+  .maps-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 500; color: var(--accent);
+    text-decoration: none; margin-top: 5px;
+  }
+  .maps-link:active { opacity: .7; }
+
+  /* PILLS */
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 0.5px solid var(--border); }
+  .pill {
+    font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 20px;
+  }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); border: 0.5px solid var(--warn-border); }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); border: 0.5px solid var(--ok-border); }
+  .pill.neutral { background: var(--surface2); color: var(--text-muted); border: 0.5px solid var(--border); }
+
+  /* TIMELINE */
+  .tl-item { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; }
+  .tl-item + .tl-item { border-top: 0.5px solid var(--border); }
+  .tl-time {
+    font-size: 11px; font-weight: 500; color: var(--text-muted);
+    min-width: 44px; padding-top: 1px; flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .tl-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+
+  /* NOTES */
+  .note-item { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+  .note-item:last-child { margin-bottom: 0; }
+  .note-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; margin-top: 6px; }
+  .note-text { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
+  /* EDIT OVERLAY */
+  .overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    align-items: flex-end;
+  }
+  .overlay.open { display: flex; }
+  .overlay-sheet {
+    width: 100%; background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    padding: 16px;
+    max-height: 85dvh;
+    display: flex; flex-direction: column;
+  }
+  .overlay-handle {
+    width: 36px; height: 4px; background: var(--border-strong);
+    border-radius: 2px; margin: 0 auto 14px;
+  }
+  .overlay-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+  .edit-area {
+    flex: 1; min-height: 220px;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-size: 11px; line-height: 1.5;
+    background: var(--bg); color: var(--text);
+    border: 0.5px solid var(--border-strong);
+    border-radius: 8px; padding: 10px;
+    resize: vertical; overflow-y: auto;
+  }
+  .overlay-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1; padding: 11px; border-radius: 10px;
+    font-size: 14px; font-weight: 500;
+    border: none; cursor: pointer;
+  }
+  .btn:active { opacity: .8; }
+  .btn-cancel { background: var(--surface2); color: var(--text-muted); }
+  .btn-save { background: var(--accent); color: #000; }
+  .btn-del { background: var(--warn-bg); color: var(--warn); border: 0.5px solid var(--warn-border); flex: 0; padding: 11px 16px; }
+
+  /* PDF OVERLAY */
+  .pdf-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: #000; flex-direction: column;
+  }
+  .pdf-overlay.open { display: flex; }
+  .pdf-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,.8);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .pdf-bar-title { flex: 1; font-size: 14px; font-weight: 500; }
+  .pdf-close-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--surface2); color: var(--text);
+    border: none; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; background: rgba(0,0,0,.6);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .zoom-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--surface2); color: var(--text);
+    border: 0.5px solid var(--border-strong); font-size: 18px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-label { font-size: 13px; color: var(--text-muted); min-width: 44px; text-align: center; }
+  .pdf-frame { flex: 1; overflow: auto; padding: 16px; display: flex; justify-content: center; }
+  .pdf-inner { transform-origin: top center; transition: transform .15s; }
+
+  /* FAB */
+  .fab {
+    position: fixed; bottom: 24px; right: 16px; z-index: 40;
+    width: 50px; height: 50px; border-radius: 50%;
+    background: var(--accent); color: #000;
+    border: none; font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 4px 20px rgba(232,168,56,.4);
+  }
+  .fab:active { transform: scale(.95); }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); font-size: 14px; }
+
+  /* UPLOAD ZONE - removed, now inline per tab */
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="header-top">
+    <div>
+      <div class="header-brand">Gruppe 5 Filmproduktion</div>
+      <div class="header-title">Dispo <span style="color:var(--text-muted);font-weight:400;font-size:16px">699</span></div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openKeyOverlay()" title="API Key" style="opacity:.5">🔑</button>
+      <button class="icon-btn" onclick="openAddNew()">📄 <span>Neue Dispo</span></button>
+    </div>
+  </div>
+  <div class="dispo-tabs" id="dispoTabs"></div>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+<!-- EDIT OVERLAY -->
+<div class="overlay" id="editOverlay">
+  <div class="overlay-sheet">
+    <div class="overlay-handle"></div>
+    <div class="overlay-title" id="editTitle">Bearbeiten</div>
+    <textarea class="edit-area" id="editArea" rows="12"></textarea>
+    <div class="overlay-btns">
+      <button class="btn btn-del" onclick="deleteDispo()">🗑</button>
+      <button class="btn btn-cancel" onclick="closeOverlay('editOverlay')">Abbrechen</button>
+      <button class="btn btn-save" onclick="saveEdit()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="pdfFileInput" accept=".pdf" onchange="handlePdfUpload(event)" style="display:none">
+<input type="file" id="newDispoInput" accept=".pdf" onchange="handleNewDispo(event)" style="display:none">
+
+
+<button class="fab" onclick="openPdf()" title="Original PDF öffnen">📄</button>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────
+const DEFAULT_DISPOS = [
+  {
+    id: 'spoho',
+    label: 'SpoHo Köln',
+    pdfName: '699_Dispo_SpoHo_Ko_ln_03_03__Team.pdf',
+    pdfBase64: null,
+    days: [
+      {
+        date: '2026-03-03',
+        label: 'Di, 03.03.2026',
+        subtitle: 'Deutsche Sporthochschule Köln',
+        location: { name: 'Musisches Forum (Gebäude C7)\nAm Sportpark Müngersdorf 6, 50933 Köln', maps: 'https://www.google.com/maps/search/?api=1&query=Am+Sportpark+M%C3%BCngersdorf+6+50933+K%C3%B6ln' },
+        hotel: null,
+        pills: [],
+        timeline: [
+          { t: '08:20', tx: 'Aufbau Maske, Catering und Aufenthalt' },
+          { t: '08:30', tx: 'Maske Mai Thi' },
+          { t: '09:00', tx: 'Aufbau Kamera, Licht und Ton' },
+          { t: '09:45', tx: 'Maske Hannah, Johanna und Emily (5 min/Person)' },
+          { t: '10:00', tx: 'Dreh: Avatare erstellen im Labor des MuFo mit Mai und drei Studis (1 Std)' },
+          { t: '10:00', tx: 'Maske Derya' },
+          { t: '10:15', tx: 'Maske Helena' },
+          { t: '11:00', tx: 'Dreh: Comparison Tool im Labor des MuFo mit Mai, Derya und Helena (1 Std)' },
+          { t: '12:00', tx: 'Mittag' },
+          { t: '12:45', tx: 'Umbau und Maske Teresa und Linus' },
+          { t: '13:15', tx: 'Dreh: Fortschritt Tanzchoreo in Halle 3 (1:15 Std)' },
+          { t: '14:30', tx: 'Dreh: Interview mit Helena + Pressefotos (1 Std)' },
+          { t: '14:30', tx: 'Pressefotos parallel mit Mai' },
+          { t: '15:30', tx: 'Drehschluss und Abbau' },
+          { t: '16:00', tx: 'Abfahrt' },
+        ],
+        notes: [
+          'Einfahrt Peco-Bauwens-Allee (vom Stadion kommend, hinter Zebrastreifen rechts). An Schranke klingeln und "Terra X" nennen — Mitarbeiter wissen Bescheid.',
+          'Feuerwehrzufahrten freihalten! Nicht auf Grünflächen parken. Stellplätze vor den Wohnheimen.',
+          'Nächstes KH: St. Elisabeth-Krankenhaus Köln-Hohenlind, Werthmannstraße 1, 50935 Köln — Rettungssanitäter vor Ort.',
+          'Tanzcrew: warme Kleidung für Pausen, Tennissocken (Modern Dance), Knieschoner empfohlen.',
+          'Catering: komplett vegetarisch/vegan — Frühstück und Mittagessen.',
+        ]
+      }
+    ]
+  },
+  {
+    id: 'lausanne',
+    label: 'Lausanne',
+    pdfName: '699_Dispo_Lausanne_24_03_-27_03_.pdf',
+    pdfBase64: null,
+    days: [
+      {
+        date: '2026-03-24',
+        label: 'Di, 24.03.2026',
+        subtitle: 'Anreise',
+        location: null,
+        hotel: { name: 'Hotel De La Paix\nAvenue Benjamin-Constant 5, 1003 Lausanne\nTel: +41 21 310 7171', maps: 'https://www.google.com/maps/search/?api=1&query=Hotel+De+La+Paix+Avenue+Benjamin-Constant+5+Lausanne' },
+        pills: [],
+        timeline: [
+          { t: '10:00', tx: 'Till: 9-Sitzer bei Avis Poll abholen (Max-Glomsda-Str. 4, 51105 Köln — Ref: 07666414DE0, Via Medias: M755242)' },
+          { t: '10:30', tx: 'Treffen Jonas + Till am Obi Rösrath (Hanns-Martin-Schleyer-Straße 1, 51503 Rösrath)' },
+          { t: '', tx: 'Abfahrt zum Zollamt Weil am Rhein Autobahn Ausfuhr (Im Kränzliacker 22, 79576 Weil am Rhein) — geöffnet bis 22:00 Uhr (ca. 5:30h, 490 km) → Carnet abstempeln lassen!' },
+          { t: '', tx: 'Weiterfahrt Hotel Lausanne, Check-In (ca. 2:30h, 200 km)' },
+          { t: '10:30', tx: 'Max: Ankunft Flughafen Palma' },
+          { t: '12:40', tx: 'Max: Abflug EasyJet EJU1390 Palma → Genf (Ref: KCBC9NZ)' },
+          { t: '14:25', tx: 'Max: Landung Genf GVA' },
+          { t: '15:25', tx: 'Max: Zug IC727 Genf Flughafen → Lausanne (Wg 5, Platz 186, Flexticket, inkl. City Ticket Lausanne)' },
+          { t: '16:14', tx: 'Max: Ankunft Lausanne → M2 Richtung Epalinges, Station Bessière → 5 min zu Fuß zum Hotel' },
+        ],
+        notes: [
+          'Hotel bereits bezahlt, inkl. Frühstück.',
+          'Parkplatz reserviert und bezahlt! Auto vor dem Hotel abstellen, Schlüssel an Rezeption abgeben — wird geparkt.',
+          'City Ticket Lausanne ist in der Bahnkarte enthalten.',
+        ]
+      },
+      {
+        date: '2026-03-25',
+        label: 'Mi, 25.03.2026',
+        subtitle: 'Dreh NeuroRestore Lab — Interviews',
+        location: { name: 'NeuroRestore\nChem. des Falaises 1, 1005 Lausanne\nAP: Léonie Asboth', maps: 'https://www.google.com/maps/search/?api=1&query=Chemin+des+Falaises+1+1005+Lausanne' },
+        hotel: { name: 'Hotel De La Paix\nAvenue Benjamin-Constant 5, 1003 Lausanne', maps: 'https://www.google.com/maps/search/?api=1&query=Hotel+De+La+Paix+Avenue+Benjamin-Constant+5+Lausanne' },
+        pills: [
+          { label: '⚠ Keine Drohne in Lausanne', type: 'warn' },
+          { label: '✓ Drohne Weinberge Lavaux OK', type: 'ok' },
+        ],
+        timeline: [
+          { t: 'i.e.D.', tx: 'Frühstück im Hotel' },
+          { t: '10:00', tx: 'Opener-Bilder drehen (KEINE Drohne in der Stadt Lausanne! Weinberge Lavaux ist genehmigungsfrei — siehe Drohnenkarte Seite 5 PDF)' },
+          { t: '12:30', tx: 'Mittag' },
+          { t: '14:15', tx: 'Fahrt zum NeuroRestore Lab' },
+          { t: '14:30', tx: 'Treffen mit Elsa und Léonie — Begehung der Räume' },
+          { t: '15:00', tx: 'Dreh: Interviews mit Prof. Jocelyn Bloch und Prof. Grégoire Courtine' },
+          { t: '17:00', tx: 'Dreh: MRI' },
+          { t: '18:00', tx: 'Drehschluss und zurück zum Hotel' },
+        ],
+        notes: [
+          'Parken: Seitenstreifen am Gebäude.',
+          'Drehen in Lausanne im öffentlichen Bereich genehmigungsfrei bis 10 Personen.',
+        ]
+      },
+      {
+        date: '2026-03-26',
+        label: 'Do, 26.03.2026',
+        subtitle: 'Dreh Therapie Session + Porträt Martha (außen)',
+        location: { name: 'NeuroRestore\nChem. des Falaises 1, 1005 Lausanne\nAP: Léonie Asboth', maps: 'https://www.google.com/maps/search/?api=1&query=Chemin+des+Falaises+1+1005+Lausanne' },
+        hotel: { name: 'Hotel De La Paix\nAvenue Benjamin-Constant 5, 1003 Lausanne', maps: 'https://www.google.com/maps/search/?api=1&query=Hotel+De+La+Paix+Avenue+Benjamin-Constant+5+Lausanne' },
+        pills: [
+          { label: '⚠ Keine Drohne in Lausanne', type: 'warn' },
+          { label: '✓ Drohne Lavaux: max. 120m', type: 'ok' },
+        ],
+        timeline: [
+          { t: 'i.e.D.', tx: 'Frühstück im Hotel' },
+          { t: '09:40', tx: 'Fahrt zum NeuroRestore Lab' },
+          { t: '10:00', tx: 'Dreh: Therapie Session mit Martha Dombi und Gert-Jan Oskam' },
+          { t: '13:00', tx: 'Mittagspause' },
+          { t: 'tbd', tx: 'Eventuell weitere Porträt-Drehs mit Martha (nach Ansage Regie)' },
+        ],
+        notes: [
+          'Drohne außerhalb Lausanne (z.B. Weinberge Lavaux): genehmigungsfrei, aber max. 120m, nicht über Menschenansammlungen, nicht über Privatbereiche, keine Fremden filmen.',
+        ]
+      },
+      {
+        date: '2026-03-27',
+        label: 'Fr, 27.03.2026',
+        subtitle: 'Abreise',
+        location: null,
+        hotel: null,
+        pills: [],
+        timeline: [
+          { t: 'i.e.D.', tx: 'Frühstück im Hotel' },
+          { t: 'i.e.D.', tx: 'Jonas + Till: Hauptzollamt Lörrach / Zollamt Weil am Rhein-Autobahn (Lustgartenstraße 1, 79576 Weil am Rhein) → Carnet abstempeln!' },
+          { t: '', tx: 'Jonas + Till: Fahrt nach Köln zu Avis in Poll' },
+          { t: '10:00', tx: 'Max: M2 Richtung Lausanne Ouchy-Olympique → Bahnhof Lausanne (City Ticket enthalten)' },
+          { t: '10:34', tx: 'Max: Zug IC519 Lausanne → Zürich Flughafen (Wg 2, Platz 21, Flexticket)' },
+          { t: '13:11', tx: 'Max: Ankunft Zürich Flughafen' },
+          { t: '15:40', tx: 'Max: Abflug SwissAir LX2150 Zürich → Palma (Ref: YWGI68)' },
+          { t: '17:30', tx: 'Max: Landung Palma' },
+        ],
+        notes: [
+          'Carnet muss bei der Rückreise WIEDER abgestempelt werden (Zollamt Weil am Rhein).',
+        ]
+      }
+    ]
+  },
+  {
+    id: 'bootbox',
+    label: 'Bootbox Köln',
+    pdfName: '699_Dispo_Bootbox_Ko_ln_02_06_.pdf',
+    pdfBase64: null,
+    days: [
+      {
+        date: '2026-06-02',
+        label: 'Di, 02.06.2026',
+        subtitle: 'Fitnesstudio Bootbox Köln',
+        location: { name: 'Bootbox — Personal Training & Boutique Gym\nWiddersdorfer Str. 217, 50825 Köln\nAP: Janine Blodau', maps: 'https://www.google.com/maps/search/?api=1&query=Widdersdorfer+Str+217+50825+K%C3%B6ln' },
+        hotel: null,
+        pills: [],
+        timeline: [
+          { t: '11:20', tx: 'Abfahrt Luise, Christopher, Malte (Kombi von Christopher, Abfahrt Gruppe 5)' },
+          { t: '12:00', tx: 'Alle am Set — Aufbau Maske, Catering und Aufenthalt' },
+          { t: '12:15', tx: 'Maske Mai Thi und Kostüm „Moderation"' },
+          { t: '12:15', tx: 'Aufbau Kamera, Licht und Ton' },
+          { t: '12:45', tx: 'Dreh: Allgemeine Impressionen Fitness-Studio' },
+          { t: '13:30', tx: 'Dreh: Moderationen' },
+          { t: '14:30', tx: 'Kostümwechsel: „Trainingsanzug" + Alterssimulationsanzug — Abpudern Janine' },
+          { t: '14:45', tx: 'Dreh: Training im Alterssimulationsanzug' },
+          { t: '16:30', tx: 'Drehschluss und Abbau' },
+          { t: '17:00', tx: 'Rückfahrt' },
+        ],
+        notes: [
+          'Nur 5h Drehtag (12–17 Uhr) — keine Mittagspause. Brötchen und Snacks durchgehend verfügbar.',
+          'Parken im Innenhof: Einfahrt beim Tor „Mediatec", dann durch bis in den 2. Innenhof.',
+          'Kostüm „Moderation" über Christopher — Kostüm „Trainingsanzug" über Mai Thi — Alterssimulationsanzug über Christopher.',
+          'Luise kommt mit Mietauto (Cambio Lutherkirche, 01.06.–03.06.).',
+          'Wetter: 17–22°C, bewölkt, 90% Regenwahrscheinlichkeit.',
+        ]
+      }
+    ]
+  }
+];
+
+// ─── STATE ───────────────────────────────────────────────────────────────
+let dispos = JSON.parse(localStorage.getItem('dispo_v2') || 'null') || DEFAULT_DISPOS;
+let activeId = null;
+let editingId = null;
+let currentZoom = 1;
+let apiKey = localStorage.getItem('dispo_apikey') || '';
+const pdfStore = {}; // id -> base64 string — in memory only, not in localStorage
+
+function save() {
+  // strip pdfBase64 before saving to avoid quota errors
+  const slim = dispos.map(d => { const {pdfBase64, ...rest} = d; return rest; });
+  try { localStorage.setItem('dispo_v2', JSON.stringify(slim)); } catch(e) { console.warn('localStorage full', e); }
+}
+function getActive() { return dispos.find(d => d.id === activeId); }
+function saveKey(k) { apiKey = k; localStorage.setItem('dispo_apikey', k); }
+
+function isToday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const t = new Date(); t.setHours(0,0,0,0);
+  return d.getTime() === t.getTime();
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────
+function init() {
+  // auto-select dispo with today's shoot, or first
+  const todayDispo = dispos.find(d => d.days.some(day => isToday(day.date)));
+  activeId = (todayDispo || dispos[0])?.id || null;
+  render();
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────
+function render() { renderTabs(); renderMain(); }
+
+function renderTabs() {
+  const c = document.getElementById('dispoTabs');
+  c.innerHTML = dispos.map(d => {
+    const isActive = d.id === activeId;
+    return `<div class="tab-group">
+      <div class="tab${isActive ? ' active' : ''}" onclick="setActive('${d.id}')">${d.label}</div>
+      ${isActive ? `
+        <div class="tab-actions">
+          <button class="tab-btn del" onclick="confirmDelete('${d.id}')" title="Löschen">🗑</button>
+        </div>` : ''}
+    </div>`;
+  }).join('<div class="tab-sep" style="width:0.5px;background:var(--border);margin:8px 2px 10px"></div>');
+}
+
+function renderMain() {
+  const c = document.getElementById('mainContent');
+  const dispo = getActive();
+  if (!dispo) { c.innerHTML = '<div class="empty">Keine Dispo — oben + drücken</div>'; return; }
+
+  c.innerHTML = dispo.days.map((day, i) => {
+    const tod = isToday(day.date);
+    const open = tod || i === 0;
+    const pillsHtml = (day.pills || []).length ? `
+      <div class="pills">
+        ${day.pills.map(p => `<span class="pill ${p.type || 'neutral'}">${p.label}</span>`).join('')}
+      </div>` : '';
+
+    const locHtml = day.location ? `
+      <div class="section">
+        <div class="section-label">Drehort</div>
+        <div class="place-row">
+          <span class="place-icon">📍</span>
+          <div>
+            <div class="place-name">${day.location.name.replace(/\n/g, '<br>')}</div>
+            <a class="maps-link" href="${day.location.maps}" target="_blank">↗ Google Maps</a>
+          </div>
+        </div>
+      </div>` : '';
+
+    const hotelHtml = day.hotel ? `
+      <div class="section">
+        <div class="section-label">Hotel</div>
+        <div class="place-row">
+          <span class="place-icon">🏨</span>
+          <div>
+            <div class="place-name">${day.hotel.name.replace(/\n/g, '<br>')}</div>
+            <a class="maps-link" href="${day.hotel.maps}" target="_blank">↗ Google Maps</a>
+          </div>
+        </div>
+      </div>` : '';
+
+    const tlHtml = (day.timeline || []).map(item => `
+      <div class="tl-item">
+        <span class="tl-time">${item.t}</span>
+        <span class="tl-text">${item.tx}</span>
+      </div>`).join('');
+
+    const notesHtml = (day.notes || []).length ? `
+      <div class="section">
+        <div class="section-label">Hinweise</div>
+        ${day.notes.map(n => `<div class="note-item"><div class="note-dot"></div><div class="note-text">${n}</div></div>`).join('')}
+      </div>` : '';
+
+    return `
+      <div class="day-card${tod ? ' today' : ''}">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div class="day-dot"></div>
+          <div class="day-header-text">
+            <div class="day-date">${day.label}</div>
+            <div class="day-subtitle">${day.subtitle}</div>
+          </div>
+          ${tod ? '<span class="today-pill">Heute</span>' : ''}
+          <span class="chevron${open ? ' open' : ''}">⌄</span>
+        </div>
+        <div class="day-body${open ? ' open' : ''}">
+          ${locHtml}${hotelHtml}${pillsHtml}
+          <div class="section">
+            <div class="section-label">Ablauf</div>
+            ${tlHtml}
+          </div>
+          ${notesHtml}
+          <div style="padding:8px 14px;display:flex;justify-content:flex-end">
+            <button onclick="editDay('${dispo.id}',${i})" style="font-size:11px;color:var(--text-dim);background:none;border:none;cursor:pointer;padding:4px 8px">✎ bearbeiten</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── INTERACTIONS ─────────────────────────────────────────────────────────
+function toggleDay(header) {
+  const body = header.nextElementSibling;
+  const chev = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function setActive(id) { activeId = id; render(); }
+
+function editDay(dispoId, dayIdx) {
+  editingId = dispoId;
+  const dispo = dispos.find(d => d.id === dispoId);
+  const day = dispo.days[dayIdx];
+  document.getElementById('editTitle').textContent = 'Tag bearbeiten: ' + day.label;
+  document.getElementById('editArea').value = JSON.stringify(day, null, 2);
+  // store dayIdx in overlay for save
+  document.getElementById('editOverlay').dataset.dayIdx = dayIdx;
+  document.getElementById('editOverlay').dataset.mode = 'day';
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function openEditDispo(id) {
+  editingId = id;
+  const d = dispos.find(x => x.id === id);
+  document.getElementById('editTitle').textContent = 'Dispo bearbeiten: ' + d.label;
+  document.getElementById('editArea').value = JSON.stringify(d, null, 2);
+  document.getElementById('editOverlay').dataset.mode = 'dispo';
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function openAddNew() {
+  document.getElementById('newDispoInput').click();
+}
+
+function handleNewDispo(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64Data = e.target.result.split(',')[1];
+    const id = 'dispo_' + Date.now();
+    const label = file.name.replace(/\.pdf$/i,'').replace(/_/g,' ').replace(/699\s*/,'').trim() || 'Neue Dispo';
+
+    // store PDF in memory
+    pdfStore[id] = e.target.result;
+
+    // placeholder while Claude reads
+    const neu = { id, label, pdfName: file.name, days: [], _loading: true };
+    dispos.push(neu);
+    activeId = id;
+    save(); render();
+    event.target.value = '';
+
+    // show loading state in main
+    document.getElementById('mainContent').innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:36px;margin-bottom:16px">⏳</div>
+        <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:8px">Claude liest die Dispo…</div>
+        <div style="font-size:13px">Das dauert ca. 10–20 Sekunden</div>
+      </div>`;
+
+    const PROMPT = `Du liest eine Filmdisposition (Disposition) als PDF. Extrahiere alle relevanten Informationen und gib sie als JSON zurück.
+
+Wichtig: Gib NUR reines JSON zurück, kein Markdown, keine Backticks, kein Kommentar.
+
+JSON-Struktur:
+{
+  "label": "Kurzer Name der Dispo (z.B. 'Bootbox Köln' oder 'Lausanne')",
+  "days": [
+    {
+      "date": "YYYY-MM-DD",
+      "label": "Wochentag, DD.MM.YYYY",
+      "subtitle": "Location / Was passiert heute",
+      "location": {
+        "name": "Name\\nAdresse",
+        "maps": "https://www.google.com/maps/search/?api=1&query=URL-encoded-Adresse"
+      },
+      "hotel": {
+        "name": "Hotelname\\nAdresse\\nTel falls vorhanden",
+        "maps": "https://www.google.com/maps/search/?api=1&query=URL-encoded-Adresse"
+      },
+      "pills": [
+        { "label": "Text", "type": "warn|ok|neutral" }
+      ],
+      "timeline": [
+        { "t": "HH:MM oder i.e.D. oder tbd", "tx": "Was passiert" }
+      ],
+      "notes": [
+        "Wichtige Hinweise, Parken, Besonderheiten, Kontakte die nicht im normalen Teamverzeichnis stehen"
+      ]
+    }
+  ]
+}
+
+Regeln:
+- location und hotel: null wenn nicht vorhanden
+- pills: Drohnengenehmigungen, Verbote, wichtige Warnungen — warn (rot) für Verbote, ok (grün) für Genehmigungen
+- timeline: Chronologisch, nur Drehtag-Abläufe (keine Sicherheitshinweise am Ende)
+- notes: Parkinfos, Einfahrtsregeln, Kostüm-Zuständigkeiten, Cateringinfos, außergewöhnliche Kontakte (nicht die normalen Teammitglieder)
+- Kamera-Specs, Sonnauf/-untergang, Codecs: NICHT übernehmen
+- Mehrere Drehtage = mehrere Einträge in days[]
+- Anreisetage und Abreisetage als eigene day-Einträge wenn relevant (mit timeline)
+- Google Maps URL: Adresse URL-encoden (Leerzeichen = +, Umlaute encoden)`;
+
+    // API key check
+    if (!apiKey) {
+      dispos = dispos.filter(d => d.id !== id);
+      save(); render();
+      openKeyOverlay(() => handleNewDispo({ target: { files: [file] } }));
+      return;
+    }
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'pdfs-2024-09-25'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+              { type: 'text', text: PROMPT }
+            ]
+          }]
+        })
+      });
+
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = data.content?.[0]?.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      const idx = dispos.findIndex(d => d.id === id);
+      dispos[idx] = {
+        id,
+        label: parsed.label || label,
+        pdfName: file.name,
+        days: parsed.days || []
+      };
+      save(); render();
+
+    } catch(err) {
+      // on error: keep dispo but empty, show error
+      const idx = dispos.findIndex(d => d.id === id);
+      if (idx >= 0) { dispos[idx]._loading = false; dispos[idx].days = []; }
+      save(); render();
+      document.getElementById('mainContent').innerHTML = `
+        <div style="text-align:center;padding:60px 20px;color:var(--warn)">
+          <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+          <div style="font-size:14px;font-weight:500;margin-bottom:8px">Fehler beim Lesen</div>
+          <div style="font-size:12px;color:var(--text-muted)">${err.message}</div>
+        </div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function openKeyOverlay(callback) {
+  document.getElementById('keyInput').value = apiKey;
+  document.getElementById('keyOverlay')._callback = callback || null;
+  document.getElementById('keyOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('keyInput').focus(), 100);
+}
+
+function submitKey() {
+  const k = document.getElementById('keyInput').value.trim();
+  if (!k) return;
+  saveKey(k);
+  const cb = document.getElementById('keyOverlay')._callback;
+  closeOverlay('keyOverlay');
+  if (cb) cb();
+}
+
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+function saveEdit() {
+  try {
+    const parsed = JSON.parse(document.getElementById('editArea').value);
+    const mode = document.getElementById('editOverlay').dataset.mode;
+    if (mode === 'day') {
+      const dayIdx = parseInt(document.getElementById('editOverlay').dataset.dayIdx);
+      const dispo = dispos.find(d => d.id === editingId);
+      dispo.days[dayIdx] = parsed;
+    } else {
+      const idx = dispos.findIndex(d => d.id === editingId);
+      dispos[idx] = parsed;
+      activeId = parsed.id;
+    }
+    save(); render(); closeOverlay('editOverlay');
+  } catch(e) { alert('Ungültiges JSON:\n' + e.message); }
+}
+
+function deleteDispo() {
+  if (!confirm('Diese Dispo wirklich löschen?')) return;
+  dispos = dispos.filter(d => d.id !== editingId);
+  if (dispos.length) activeId = dispos[0].id;
+  save(); render(); closeOverlay('editOverlay');
+}
+
+function triggerPdfUpload(id) {
+  activeId = id;
+  document.getElementById('pdfFileInput').click();
+}
+
+function confirmDelete(id) {
+  const d = dispos.find(x => x.id === id);
+  if (!d) return;
+  if (!confirm('"' + d.label + '" wirklich löschen?')) return;
+  delete pdfStore[id];
+  dispos = dispos.filter(x => x.id !== id);
+  if (activeId === id) activeId = dispos[0]?.id || null;
+  save(); render();
+}
+
+// ─── PDF ──────────────────────────────────────────────────────────────────
+function handlePdfUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const active = getActive();
+    if (!active) return;
+    pdfStore[active.id] = e.target.result;
+    active.pdfName = file.name;
+    save(); render();
+    event.target.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function openPdf() {
+  const d = getActive();
+  const pdfData = pdfStore[d?.id];
+  if (!pdfData) {
+    alert('PDF noch nicht geladen. Einmal "📄 Neue Dispo" mit der PDF-Datei nutzen — die Daten bleiben, aber das PDF muss nach jedem App-Start neu ausgewählt werden.');
+    return;
+  }
+  const byteStr = atob(pdfData.split(',')[1]);
+  const arr = new Uint8Array(byteStr.length);
+  for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+  const blob = new Blob([arr], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+// close overlays on backdrop tap
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+init();
+</script>
+<!-- API KEY OVERLAY -->
+<div class="overlay" id="keyOverlay">
+  <div class="overlay-sheet">
+    <div class="overlay-handle"></div>
+    <div class="overlay-title">API Key</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+      Einmalig eingeben — wird lokal gespeichert.<br>
+      <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent);text-decoration:none">console.anthropic.com → API Keys</a>
+    </div>
+    <input id="keyInput" type="password" placeholder="sk-ant-…"
+      style="width:100%;padding:11px 12px;border-radius:10px;border:0.5px solid var(--border-strong);background:var(--bg);color:var(--text);font-size:14px;font-family:var(--font);outline:none;margin-bottom:10px">
+    <div class="overlay-btns">
+      <button class="btn btn-cancel" onclick="closeOverlay('keyOverlay')">Abbrechen</button>
+      <button class="btn btn-save" onclick="submitKey()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
