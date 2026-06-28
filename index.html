@@ -526,6 +526,7 @@ let activeId = null;
 let editingId = null;
 let currentZoom = 1;
 let apiKey = localStorage.getItem('dispo_apikey') || '';
+let db = null;
 
 function save() {
   // strip pdfBase64 before saving to avoid quota errors
