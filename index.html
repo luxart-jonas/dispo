@@ -496,7 +496,6 @@ let activeId = null;
 let editingId = null;
 let currentZoom = 1;
 let apiKey = localStorage.getItem('dispo_apikey') || '';
-const pdfStore = {}; // id -> base64 string — in memory only, not in localStorage
 
 function save() {
   // strip pdfBase64 before saving to avoid quota errors
@@ -656,8 +655,8 @@ function handleNewDispo(event) {
     const id = 'dispo_' + Date.now();
     const label = file.name.replace(/\.pdf$/i,'').replace(/_/g,' ').replace(/699\s*/,'').trim() || 'Neue Dispo';
 
-    // store PDF in memory
-    pdfStore[id] = e.target.result;
+    // store PDF persistently in IndexedDB
+    savePdf(id, e.target.result);
 
     // placeholder while Claude reads
     const neu = { id, label, pdfName: file.name, days: [], _loading: true };
@@ -830,7 +829,7 @@ function confirmDelete(id) {
   const d = dispos.find(x => x.id === id);
   if (!d) return;
   if (!confirm('"' + d.label + '" wirklich löschen?')) return;
-  delete pdfStore[id];
+  deletePdf(id);
   dispos = dispos.filter(x => x.id !== id);
   if (activeId === id) activeId = dispos[0]?.id || null;
   save(); render();
@@ -844,7 +843,7 @@ function handlePdfUpload(event) {
   reader.onload = (e) => {
     const active = getActive();
     if (!active) return;
-    pdfStore[active.id] = e.target.result;
+    savePdf(active.id, e.target.result); // persist in IndexedDB
     active.pdfName = file.name;
     save(); render();
     event.target.value = '';
@@ -852,11 +851,12 @@ function handlePdfUpload(event) {
   reader.readAsDataURL(file);
 }
 
-function openPdf() {
+async function openPdf() {
   const d = getActive();
-  const pdfData = pdfStore[d?.id];
+  if (!d) return;
+  const pdfData = await loadPdf(d.id);
   if (!pdfData) {
-    alert('PDF noch nicht geladen. Einmal "📄 Neue Dispo" mit der PDF-Datei nutzen — die Daten bleiben, aber das PDF muss nach jedem App-Start neu ausgewählt werden.');
+    alert('Kein PDF gespeichert.\nPDF einmalig über "📄 Neue Dispo" hochladen — danach bleibt es dauerhaft gespeichert.');
     return;
   }
   const byteStr = atob(pdfData.split(',')[1]);
