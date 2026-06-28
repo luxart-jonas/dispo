@@ -312,6 +312,36 @@
 <button class="fab" onclick="openPdf()" title="Original PDF öffnen">📄</button>
 
 <script>
+
+// ─── INDEXEDDB (persistent PDF storage) ──────────────────────────────────
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('dispo_pdfs', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('pdfs', { keyPath: 'id' });
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e);
+  });
+}
+function savePdf(id, data) {
+  if (!db) return;
+  const tx = db.transaction('pdfs', 'readwrite');
+  tx.objectStore('pdfs').put({ id, data });
+}
+function loadPdf(id) {
+  return new Promise((resolve) => {
+    if (!db) return resolve(null);
+    const tx = db.transaction('pdfs', 'readonly');
+    const req = tx.objectStore('pdfs').get(id);
+    req.onsuccess = e => resolve(e.target.result?.data || null);
+    req.onerror = () => resolve(null);
+  });
+}
+function deletePdf(id) {
+  if (!db) return;
+  const tx = db.transaction('pdfs', 'readwrite');
+  tx.objectStore('pdfs').delete(id);
+}
+
 // ─── DATA ───────────────────────────────────────────────────────────────
 const DEFAULT_DISPOS = [
   {
@@ -512,8 +542,8 @@ function isToday(dateStr) {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────
-function init() {
-  // auto-select dispo with today's shoot, or first
+async function init() {
+  db = await openDB().catch(() => null);
   const todayDispo = dispos.find(d => d.days.some(day => isToday(day.date)));
   activeId = (todayDispo || dispos[0])?.id || null;
   render();
