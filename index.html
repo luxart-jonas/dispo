@@ -230,6 +230,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <input type="file" id="newDispoInput" accept=".pdf" onchange="handleNewDispo(event)" style="display:none">
+<input type="file" id="newTicketInput" accept=".pdf" onchange="handleNewTicket(event)" style="display:none">
 <button class="fab" onclick="onFab()" title="Aktion">＋</button>
 
 <script>
@@ -585,6 +586,35 @@ async function openTicketPdf(pdfId){
   const b=atob(d.split(',')[1]),a=new Uint8Array(b.length);
   for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
   window.open(URL.createObjectURL(new Blob([a],{type:'application/pdf'})),'_blank');
+}
+
+
+// ─── NEW TICKET FROM PDF ─────────────────────────────────────────────────────
+function handleNewTicket(event){
+  const file=event.target.files[0];if(!file)return;
+  event.target.value='';
+  if(!apiKey){openKeyOverlay(()=>handleNewTicket({target:{files:[file]}}));return;}
+  document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div style="font-size:36px;margin-bottom:16px">&#9203;</div><div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:8px">Claude liest das Ticket...</div><div style="font-size:13px">~10 Sekunden</div></div>';
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    const b64full=e.target.result, b64data=b64full.split(',')[1];
+    const pdfId='ticket_'+Date.now();
+    savePdf(pdfId,b64full);
+    const PROMPT='Du liest einen Boarding Pass als PDF. Das PDF kann MEHRERE Fluege enthalten. Gib NUR reines JSON zurueck - ein Array mit einem Objekt pro Flug: [{"from":"Code","from_name":"Stadt","to":"Code","to_name":"Stadt","date":"YYYY-MM-DD","weekday":"Wochentag auf Deutsch","flight":"Nr","dep":"HH:MM","boarding":"HH:MM","gate":"Gate","seat":"Sitz","class":"Klasse","zone":"Zone","airline":"Airline","passenger":"Name"}] Nur JSON, nichts anderes.';
+    try{
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64data}},{type:'text',text:PROMPT}]}]})});
+      const data=await resp.json();
+      if(data.error)throw new Error(data.error.message);
+      let parsed=JSON.parse(data.content?.[0]?.text.replace(/```json|```/g,'').trim()||'[]');
+      if(!Array.isArray(parsed))parsed=[parsed];
+      parsed.forEach(f=>{f.pdfId=pdfId;flights.push(f);});
+      save();renderFlights();
+    }catch(err){
+      deletePdf(pdfId);
+      document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--warn)"><div style="font-size:36px;margin-bottom:12px">&#9888;</div><div style="font-size:14px;margin-bottom:8px">Fehler</div><div style="font-size:12px;color:var(--text-muted)">'+err.message+'</div></div>';
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 // ─── KEY ───────────────────────────────────────────────────────────────────
