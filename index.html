@@ -358,10 +358,8 @@ function renderMain(){
   c.innerHTML=dispo.days.map((day,i)=>{
     const tod=isToday(day.date),open=tod||i===0;
     const pills=(day.pills||[]).length?`<div class="pills">${day.pills.map(p=>`<span class="pill ${p.type||'neutral'}">${p.label}</span>`).join('')}</div>`:'';
-    const loc=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${day.location.name.replace(/
-/g,'<br>')}</div><a class="maps-link" href="${day.location.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
-    const hotel=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${day.hotel.name.replace(/
-/g,'<br>')}</div><a class="maps-link" href="${day.hotel.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
+    const loc=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${day.location.name.split('\n').join('<br>')}</div><a class="maps-link" href="${day.location.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
+    const hotel=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${day.hotel.name.split('\n').join('<br>')}</div><a class="maps-link" href="${day.hotel.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
     const tl=(day.timeline||[]).map(it=>`<div class="tl-item"><span class="tl-time">${it.t}</span><span class="tl-text">${it.tx}</span></div>`).join('');
     const notes=(day.notes||[]).length?`<div class="section"><div class="section-label">Hinweise</div>${day.notes.map(n=>`<div class="note-item"><div class="note-dot"></div><div class="note-text">${n}</div></div>`).join('')}</div>`:'';
     return `<div class="day-card${tod?' today':''}">
@@ -446,8 +444,7 @@ function saveEdit(){
     if(m==='day'){const dispo=dispos.find(d=>d.id===editingId);dispo.days[parseInt(document.getElementById('editOverlay').dataset.dayIdx)]=parsed;}
     else{const idx=dispos.findIndex(d=>d.id===editingId);dispos[idx]=parsed;activeId=parsed.id;}
     save();render();closeOverlay('editOverlay');
-  }catch(e){alert('Ungültiges JSON:
-'+e.message);}
+  }catch(e){alert('Ungültiges JSON:\n'+e.message);}
 }
 function deleteDispo(){
   if(!confirm('Dispo wirklich löschen?'))return;
