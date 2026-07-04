@@ -199,10 +199,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     <div class="form-field"><div class="form-label">Name (Passagier)</div><input class="form-input" id="ff_name" placeholder="Jonas Sichert"></div>
     <div class="form-field"><div class="form-label">Barcode-Text (Buchungsref oder PNR für Scan)</div><input class="form-input" id="ff_barcode" placeholder="KCBC9NZ"></div>
     <div class="form-field">
-      <div class="form-label">PDF Ticket (optional)</div>
-      <button class="add-flight-btn" onclick="document.getElementById('ticketPdfInput').click()">📄 PDF auswählen</button>
+      <div class="form-label">Ticket-Datei (optional, PDF oder Foto)</div>
+      <button class="add-flight-btn" onclick="document.getElementById('ticketPdfInput').click()">📄 Datei auswählen</button>
       <div id="ticketPdfName" style="font-size:12px;color:var(--text-muted);margin-top:-6px"></div>
-      <input type="file" id="ticketPdfInput" accept=".pdf" onchange="handleTicketPdf(event)" style="display:none">
+      <input type="file" id="ticketPdfInput" accept="image/*,.pdf" onchange="handleTicketPdf(event)" style="display:none">
     </div>
     <div class="overlay-btns">
       <button class="btn btn-cancel" onclick="closeOverlay('flightOverlay')">Abbrechen</button>
@@ -230,7 +230,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <input type="file" id="newDispoInput" accept=".pdf" onchange="handleNewDispo(event)" style="display:none">
-<input type="file" id="newTicketInput" accept=".pdf" onchange="handleNewTicket(event)" style="display:none">
+<input type="file" id="newTicketInput" accept="image/*,.pdf" onchange="handleNewTicket(event)" style="display:none">
 <button class="fab" onclick="onFab()" title="Aktion">＋</button>
 
 <script>
@@ -370,7 +370,7 @@ function renderMain(){
 function renderFlights(){
   const c=document.getElementById('mainContent');
   if(!flights.length){
-    c.innerHTML=`<div class="empty">Noch keine Tickets<br><br><button onclick="document.getElementById('newTicketInput').click()" style="font-size:13px;padding:9px 18px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer">&#128196; Ticket-PDF hochladen</button></div>`;
+    c.innerHTML=`<div class="empty">Noch keine Tickets<br><br><button onclick="document.getElementById('newTicketInput').click()" style="font-size:13px;padding:9px 18px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer">&#128196; Ticket hochladen (PDF/Foto)</button></div>`;
     return;
   }
   const sorted=[...flights].map((f,i)=>({...f,_i:i})).sort((a,b)=>a.date.localeCompare(b.date));
@@ -489,13 +489,20 @@ Regeln: location/hotel null wenn nicht vorhanden. pills für Drohne/Verbote. NIC
   reader.readAsDataURL(file);
 }
 
+function openStoredFile(dataUrl){
+  const m=dataUrl.match(/^data:([^;]+);base64,([\s\S]*)$/);
+  const mime=m?m[1]:'application/pdf';
+  const b64=m?m[2]:dataUrl.split(',')[1];
+  const byteStr=atob(b64),arr=new Uint8Array(byteStr.length);
+  for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
+  window.open(URL.createObjectURL(new Blob([arr],{type:mime})),'_blank');
+}
+
 async function openPdf(){
   const d=getActive();if(!d)return;
   const pdfData=await loadPdf(d.id);
   if(!pdfData){alert('Kein PDF gespeichert. PDF einmalig über Neue Dispo hochladen.');return;}
-  const byteStr=atob(pdfData.split(',')[1]),arr=new Uint8Array(byteStr.length);
-  for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
-  window.open(URL.createObjectURL(new Blob([arr],{type:'application/pdf'})),'_blank');
+  openStoredFile(pdfData);
 }
 
 // ─── FLIGHTS ───────────────────────────────────────────────────────────────
@@ -573,10 +580,8 @@ function deleteFlight(idx){
 
 async function openTicketPdf(pdfId){
   const pdfData=await loadPdf(pdfId);
-  if(!pdfData){alert('PDF nicht mehr gespeichert.');return;}
-  const byteStr=atob(pdfData.split(',')[1]),arr=new Uint8Array(byteStr.length);
-  for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
-  window.open(URL.createObjectURL(new Blob([arr],{type:'application/pdf'})),'_blank');
+  if(!pdfData){alert('Datei nicht mehr gespeichert.');return;}
+  openStoredFile(pdfData);
 }
 
 
@@ -592,28 +597,49 @@ function handleNewTicket(event){
     const b64full=e.target.result, b64data=b64full.split(',')[1];
     const pdfId='ticket_'+Date.now();
     savePdf(pdfId,b64full);
-    const PROMPT='Du liest einen Boarding Pass als PDF. Das PDF kann MEHRERE Fluege enthalten. Gib NUR reines JSON zurueck - ein Array mit einem Objekt pro Flug: [{"from":"Abflughafen-Code","from_name":"Stadtname","to":"Zielflughafen-Code","to_name":"Stadtname","date":"YYYY-MM-DD","weekday":"Wochentag auf Deutsch","flight":"Flugnummer","dep":"HH:MM","boarding":"HH:MM","gate":"Gate oder leer","gate_info":"Zusatzinfo Gate falls vorhanden","terminal":"Terminal falls vorhanden","seat":"Sitz","class":"Klasse","zone":"Boarding Zone","airline":"Airline","passenger":"Passagiername"}] Nur JSON.';
+    const isImage=isImageFile(file);
+    const mediaType=isImage?imageMediaType(file):'application/pdf';
+    const PROMPT='Du liest einen Boarding Pass (als Foto oder PDF). Es koennen MEHRERE Fluege enthalten sein. Gib NUR reines JSON zurueck - ein Array mit einem Objekt pro Flug: [{"from":"Abflughafen-Code","from_name":"Stadtname","to":"Zielflughafen-Code","to_name":"Stadtname","date":"YYYY-MM-DD","weekday":"Wochentag auf Deutsch","flight":"Flugnummer","dep":"HH:MM","boarding":"HH:MM","gate":"Gate oder leer","gate_info":"Zusatzinfo Gate falls vorhanden","terminal":"Terminal falls vorhanden","seat":"Sitz","class":"Klasse","zone":"Boarding Zone","airline":"Airline","passenger":"Passagiername"}] Nur JSON, keine Erklaerung, keine Markdown-Backticks.';
+    const contentBlock=isImage
+      ?{type:'image',source:{type:'base64',media_type:mediaType,data:b64data}}
+      :{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64data}};
+    const headers={'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','x-api-key':apiKey,'anthropic-version':'2023-06-01'};
+    if(!isImage)headers['anthropic-beta']='pdfs-2024-09-25';
     try{
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64data}},{type:'text',text:PROMPT}]}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers,body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[contentBlock,{type:'text',text:PROMPT}]}]})});
       const data=await resp.json();
       if(data.error)throw new Error(data.error.message);
-      let parsed=JSON.parse(data.content?.[0]?.text.replace(/```json|```/g,'').trim()||'[]');
+      let raw=data.content?.[0]?.text||'[]';
+      raw=raw.replace(/```json|```/g,'').trim();
+      const firstBracket=raw.search(/[\[{]/);
+      if(firstBracket>0)raw=raw.slice(firstBracket);
+      let parsed=JSON.parse(raw||'[]');
       if(!Array.isArray(parsed))parsed=[parsed];
+      if(!parsed.length)throw new Error('Kein Flug erkannt. Bild evtl. zu unscharf/abgeschnitten.');
       parsed.forEach(f=>{f.pdfId=pdfId;flights.push(f);});
       save();renderFlights();
     }catch(err){
       deletePdf(pdfId);
-      document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--warn)"><div style="font-size:36px;margin-bottom:12px">&#9888;</div><div style="font-size:14px;margin-bottom:8px">Fehler: '+err.message+'</div></div>';
+      document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--warn)"><div style="font-size:36px;margin-bottom:12px">&#9888;</div><div style="font-size:14px;margin-bottom:8px">Fehler: '+escapeHtmlD(err.message)+'</div></div>';
     }
   };
   reader.readAsDataURL(file);
 }
 
-async function openTicketPdf(pdfId){
-  const d=await loadPdf(pdfId);if(!d){alert('PDF nicht mehr gespeichert.');return;}
-  const b=atob(d.split(',')[1]),a=new Uint8Array(b.length);
-  for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
-  window.open(URL.createObjectURL(new Blob([a],{type:'application/pdf'})),'_blank');
+function isImageFile(file){
+  if(file.type&&file.type.startsWith('image/'))return true;
+  return /\.(jpe?g|png|webp|heic|heif|gif|bmp)$/i.test(file.name||'');
+}
+function imageMediaType(file){
+  if(file.type&&file.type.startsWith('image/'))return file.type;
+  const ext=(file.name.match(/\.(\w+)$/)||[])[1]?.toLowerCase();
+  if(ext==='png')return'image/png';
+  if(ext==='webp')return'image/webp';
+  if(ext==='gif')return'image/gif';
+  return'image/jpeg';
+}
+function escapeHtmlD(s){
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ─── KEY ───────────────────────────────────────────────────────────────────
