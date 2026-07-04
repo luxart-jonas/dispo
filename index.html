@@ -60,7 +60,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .day-card.today{border-color:var(--today-border);background:var(--today)}
 .day-header{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;user-select:none}
 .day-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong);flex-shrink:0}
-.today .day-dot{background:var(--accent)}
+.today .day-dot{background:var(--ok)}
 .day-header-text{flex:1;min-width:0}
 .day-date{font-size:14px;font-weight:600}
 .day-subtitle{font-size:12px;color:var(--text-muted);margin-top:1px}
@@ -316,7 +316,7 @@ function setMode(m){
 
 function onFab(){
   if(mode==='dispo') openAddNew();
-  else openFlightForm(-1);
+  else document.getElementById('newTicketInput').click();
 }
 
 // ─── RENDER ────────────────────────────────────────────────────────────────
@@ -342,7 +342,7 @@ function renderMain(){
   const dispo=getActive();
   if(!dispo){c.innerHTML='<div class="empty">Keine Dispo — oben + drücken</div>';return;}
   c.innerHTML=dispo.days.map((day,i)=>{
-    const tod=isToday(day.date),open=tod||i===0;
+    const tod=isToday(day.date),open=false;
     const pillsHtml=(day.pills||[]).length?`<div class="pills">${day.pills.map(p=>`<span class="pill ${p.type||'neutral'}">${p.label}</span>`).join('')}</div>`:'';
     const locHtml=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${day.location.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${day.location.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
     const hotelHtml=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${day.hotel.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${day.hotel.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
@@ -369,12 +369,16 @@ function renderMain(){
 
 function renderFlights(){
   const c=document.getElementById('mainContent');
+  const scanBar=`<div style="display:flex;gap:8px;padding:12px 14px 4px;align-items:center">
+    <button onclick="document.getElementById('newTicketInput').click()" style="flex:1;font-size:13px;padding:11px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer;font-weight:600">&#128248; Ticket scannen (Foto/PDF)</button>
+    <button onclick="openFlightForm(-1)" style="font-size:12px;padding:11px 12px;border-radius:8px;background:none;border:1px solid var(--border-strong);color:var(--text-muted);cursor:pointer;white-space:nowrap">&#9998; manuell</button>
+  </div>`;
   if(!flights.length){
-    c.innerHTML=`<div class="empty">Noch keine Tickets<br><br><button onclick="document.getElementById('newTicketInput').click()" style="font-size:13px;padding:9px 18px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer">&#128196; Ticket hochladen (PDF/Foto)</button></div>`;
+    c.innerHTML=scanBar+`<div class="empty">Noch keine Tickets</div>`;
     return;
   }
   const sorted=[...flights].map((f,i)=>({...f,_i:i})).sort((a,b)=>a.date.localeCompare(b.date));
-  c.innerHTML=sorted.map(f=>{
+  c.innerHTML=scanBar+sorted.map(f=>{
     const tod=isToday(f.date);
     const wt=f.date?new Date(f.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}):'';
     return `<div class="flight-card${tod?' today':''}">
