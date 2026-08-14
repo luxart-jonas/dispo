@@ -476,9 +476,10 @@ Struktur:
 
 Regeln: location/hotel null wenn nicht vorhanden. pills für Drohne/Verbote. NICHT: Kamera-Specs, Codecs, Sonnenauf/-untergang. Anreisetage mit Timeline. Google Maps URLs URL-encoden.`;
     try{
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:base64Data}},{type:'text',text:PROMPT}]}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-beta':'pdfs-2024-09-25'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8192,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:base64Data}},{type:'text',text:PROMPT}]}]})});
       const data=await resp.json();
       if(data.error)throw new Error(data.error.message);
+      if(data.stop_reason==='max_tokens')throw new Error('Antwort wurde von Claude abgeschnitten (Dispo zu lang/umfangreich). Bitte kürzere PDF versuchen oder max_tokens im Code weiter erhöhen.');
       const parsed=JSON.parse(data.content?.[0]?.text.replace(/```json|```/g,'').trim()||'{}');
       const idx=dispos.findIndex(d=>d.id===id);
       dispos[idx]={id,label:parsed.label||label,pdfName:file.name,days:parsed.days||[]};
