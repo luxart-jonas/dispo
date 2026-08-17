@@ -154,6 +154,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   <div class="mode-row">
     <button class="mode-btn active" id="modeDispo" onclick="setMode('dispo')">📋 Dispo</button>
     <button class="mode-btn" id="modeFlight" onclick="setMode('flight')">✈️ Tickets</button>
+    <button class="mode-btn" id="modeDocs" onclick="setMode('docs')">📁 Dokumente</button>
   </div>
   <div class="dispo-tabs" id="dispoTabs" style="display:flex"></div>
 </div>
@@ -229,8 +230,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 
+<!-- DOCUMENT OVERLAY -->
+<div class="overlay" id="docOverlay">
+  <div class="overlay-sheet">
+    <div class="overlay-handle"></div>
+    <div class="overlay-title" id="docOverlayTitle">Dokument</div>
+    <div class="form-field">
+      <div class="form-label">Bezeichnung</div>
+      <input class="form-input" id="doc_label" placeholder="z.B. Zugfahrt Schweiz">
+    </div>
+    <div id="docFileInfo" style="font-size:12px;color:var(--text-muted);margin:-6px 0 14px"></div>
+    <div class="overlay-btns">
+      <button class="btn btn-del" onclick="deleteDocConfirm()">🗑</button>
+      <button class="btn btn-cancel" onclick="closeOverlay('docOverlay')">Abbrechen</button>
+      <button class="btn btn-save" onclick="saveDocLabel()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="newDispoInput" accept=".pdf" onchange="handleNewDispo(event)" style="display:none">
 <input type="file" id="newTicketInput" accept="image/*,.pdf" onchange="handleNewTicket(event)" style="display:none">
+<input type="file" id="newDocInput" multiple onchange="handleNewDoc(event)" style="display:none">
 <button class="fab" onclick="onFab()" title="Aktion">＋</button>
 
 <script>
@@ -273,12 +293,14 @@ function deletePdf(id){if(!db)return;db.transaction('pdfs','readwrite').objectSt
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let dispos = JSON.parse(localStorage.getItem('dispo_v2')||'null') || DEFAULTDATA();
 let flights = JSON.parse(localStorage.getItem('flights_v1')||'[]');
+let documents = JSON.parse(localStorage.getItem('documents_v1')||'[]');
 let activeId = null;
 let editingId = null;
 let apiKey = localStorage.getItem('dispo_apikey')||'';
 let db = null;
-let mode = 'dispo'; // 'dispo' | 'flight'
+let mode = 'dispo'; // 'dispo' | 'flight' | 'docs'
 let editFlightIdx = -1;
+let editDocIdx = -1;
 let pendingTicketPdf = null; // {id, data}
 
 function DEFAULTDATA() {
@@ -293,6 +315,7 @@ function save(){
   const slim=dispos.map(d=>{const{pdfBase64,...r}=d;return r;});
   try{localStorage.setItem('dispo_v2',JSON.stringify(slim));}catch(e){}
   try{localStorage.setItem('flights_v1',JSON.stringify(flights));}catch(e){}
+  try{localStorage.setItem('documents_v1',JSON.stringify(documents));}catch(e){}
 }
 function getActive(){return dispos.find(d=>d.id===activeId);}
 function saveKey(k){apiKey=k;localStorage.setItem('dispo_apikey',k);}
@@ -310,24 +333,27 @@ function setMode(m){
   mode=m;
   document.getElementById('modeDispo').classList.toggle('active',m==='dispo');
   document.getElementById('modeFlight').classList.toggle('active',m==='flight');
+  document.getElementById('modeDocs').classList.toggle('active',m==='docs');
   document.getElementById('dispoTabs').style.display=m==='dispo'?'flex':'none';
   render();
 }
 
 function onFab(){
   if(mode==='dispo') openAddNew();
-  else document.getElementById('newTicketInput').click();
+  else if(mode==='flight') document.getElementById('newTicketInput').click();
+  else document.getElementById('newDocInput').click();
 }
 
 // ─── RENDER ────────────────────────────────────────────────────────────────
 function render(){
   if(mode==='dispo'){renderTabs();renderMain();}
-  else{renderTabs();renderFlights();}
+  else if(mode==='flight'){renderTabs();renderFlights();}
+  else{renderTabs();renderDocs();}
 }
 
 function renderTabs(){
   const c=document.getElementById('dispoTabs');
-  if(mode==='flight'){c.innerHTML='';return;}
+  if(mode!=='dispo'){c.innerHTML='';return;}
   c.innerHTML=dispos.map(d=>{
     const a=d.id===activeId;
     return `<div class="tab-group">
@@ -412,6 +438,90 @@ function renderFlights(){
       </div>
     </div>`;
   }).join('');
+}
+
+function renderDocs(){
+  const c=document.getElementById('mainContent');
+  const addBar=`<div style="padding:12px 14px 4px">
+    <button onclick="document.getElementById('newDocInput').click()" style="width:100%;font-size:13px;padding:11px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer;font-weight:600">📁 Dokument hinzufügen</button>
+  </div>`;
+  if(!documents.length){
+    c.innerHTML=addBar+`<div class="empty">Noch keine Dokumente<br><span style="font-size:12px">Heruntergeladene Dateien landen hier — Name kannst du danach anpassen</span></div>`;
+    return;
+  }
+  const sorted=[...documents].map((d,i)=>({...d,_i:i})).sort((a,b)=>(b.addedAt||'').localeCompare(a.addedAt||''));
+  c.innerHTML=addBar+sorted.map(d=>{
+    const icon=docIcon(d.mime,d.fileName);
+    const dt=d.addedAt?new Date(d.addedAt).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+    return `<div class="flight-card">
+      <div class="flight-header" style="cursor:pointer" onclick="openStoredDoc('${d.id}')">
+        <div class="day-dot"></div>
+        <div class="flight-header-text">
+          <div class="flight-route-line">${icon} ${escapeHtmlD(d.label||d.fileName||'Dokument')}</div>
+          <div class="flight-sub">${escapeHtmlD(d.fileName||'')}${dt?' · '+dt:''}</div>
+        </div>
+        <button onclick="event.stopPropagation();openDocEdit(${d._i})" style="font-size:13px;background:none;border:none;cursor:pointer;color:var(--text-dim);padding:4px 6px">✎</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function docIcon(mime,fileName){
+  const m=(mime||'').toLowerCase(), n=(fileName||'').toLowerCase();
+  if(m.includes('pdf')||n.endsWith('.pdf'))return'📄';
+  if(m.startsWith('image/')||/\.(jpe?g|png|webp|heic|heif|gif|bmp)$/.test(n))return'🖼️';
+  return'📁';
+}
+
+function handleNewDoc(event){
+  const files=Array.from(event.target.files||[]);
+  event.target.value='';
+  if(!files.length)return;
+  let remaining=files.length;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const id='doc_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+      savePdf(id,e.target.result);
+      const label=file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim()||'Dokument';
+      documents.push({id,label,fileName:file.name,mime:file.type||'',addedAt:new Date().toISOString()});
+      remaining--;
+      if(remaining===0){save();renderDocs();}
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function openDocEdit(idx){
+  editDocIdx=idx;
+  const d=documents[idx];if(!d)return;
+  document.getElementById('docOverlayTitle').textContent='Dokument bearbeiten';
+  document.getElementById('doc_label').value=d.label||'';
+  document.getElementById('docFileInfo').textContent=d.fileName||'';
+  document.getElementById('docOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('doc_label').focus(),100);
+}
+
+function saveDocLabel(){
+  if(editDocIdx<0)return;
+  const d=documents[editDocIdx];if(!d)return;
+  d.label=document.getElementById('doc_label').value.trim()||d.fileName||'Dokument';
+  save();renderDocs();closeOverlay('docOverlay');
+}
+
+function deleteDocConfirm(){
+  if(editDocIdx<0)return;
+  const d=documents[editDocIdx];if(!d)return;
+  if(!confirm('"'+(d.label||d.fileName)+'" löschen?'))return;
+  deletePdf(d.id);
+  documents.splice(editDocIdx,1);
+  save();renderDocs();closeOverlay('docOverlay');
+}
+
+async function openStoredDoc(id){
+  const data=await loadPdf(id);
+  if(!data){alert('Datei nicht mehr gespeichert.');return;}
+  openStoredFile(data);
 }
 
 function toggleDay(h){const b=h.nextElementSibling,ch=h.querySelector('.chevron');b.classList.toggle('open');ch.classList.toggle('open');}
@@ -666,6 +776,7 @@ document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=
 // FAB label update based on mode
 document.getElementById('modeDispo').addEventListener('click',()=>document.querySelector('.fab').textContent='＋');
 document.getElementById('modeFlight').addEventListener('click',()=>document.querySelector('.fab').textContent='✈️');
+document.getElementById('modeDocs').addEventListener('click',()=>document.querySelector('.fab').textContent='📁');
 
 init();
 </script>
