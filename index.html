@@ -154,6 +154,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   <div class="mode-row">
     <button class="mode-btn active" id="modeDispo" onclick="setMode('dispo')">📋 Dispo</button>
     <button class="mode-btn" id="modeFlight" onclick="setMode('flight')">✈️ Tickets</button>
+    <button class="mode-btn" id="modeDocs" onclick="setMode('docs')">📁 Dokumente</button>
   </div>
   <div class="dispo-tabs" id="dispoTabs" style="display:flex"></div>
 </div>
@@ -231,6 +232,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 <input type="file" id="newDispoInput" accept=".pdf" onchange="handleNewDispo(event)" style="display:none">
 <input type="file" id="newTicketInput" accept="image/*,.pdf" onchange="handleNewTicket(event)" style="display:none">
+<input type="file" id="newDocInput" multiple onchange="handleNewDoc(event)" style="display:none">
 <button class="fab" onclick="onFab()" title="Aktion">＋</button>
 
 <script>
@@ -280,11 +282,12 @@ function deletePdf(id){if(!db)return;db.transaction('pdfs','readwrite').objectSt
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let dispos = JSON.parse(localStorage.getItem('dispo_v2')||'null') || DEFAULTDATA();
 let flights = JSON.parse(localStorage.getItem('flights_v1')||'[]');
+let documents = JSON.parse(localStorage.getItem('documents_v1')||'[]');
 let activeId = null;
 let editingId = null;
 let apiKey = localStorage.getItem('dispo_apikey')||'';
 let db = null;
-let mode = 'dispo'; // 'dispo' | 'flight'
+let mode = 'dispo'; // 'dispo' | 'flight' | 'docs'
 let editFlightIdx = -1;
 let pendingTicketPdf = null; // {id, data}
 
@@ -300,6 +303,7 @@ function save(){
   const slim=dispos.map(d=>{const{pdfBase64,...r}=d;return r;});
   try{localStorage.setItem('dispo_v2',JSON.stringify(slim));}catch(e){}
   try{localStorage.setItem('flights_v1',JSON.stringify(flights));}catch(e){}
+  try{localStorage.setItem('documents_v1',JSON.stringify(documents));}catch(e){}
 }
 function getActive(){return dispos.find(d=>d.id===activeId);}
 function saveKey(k){apiKey=k;localStorage.setItem('dispo_apikey',k);}
@@ -317,19 +321,22 @@ function setMode(m){
   mode=m;
   document.getElementById('modeDispo').classList.toggle('active',m==='dispo');
   document.getElementById('modeFlight').classList.toggle('active',m==='flight');
+  document.getElementById('modeDocs').classList.toggle('active',m==='docs');
   document.getElementById('dispoTabs').style.display=m==='dispo'?'flex':'none';
   render();
 }
 
 function onFab(){
   if(mode==='dispo') openAddNew();
-  else document.getElementById('newTicketInput').click();
+  else if(mode==='flight') document.getElementById('newTicketInput').click();
+  else document.getElementById('newDocInput').click();
 }
 
 // ─── RENDER ────────────────────────────────────────────────────────────────
 function render(){
   if(mode==='dispo'){renderTabs();renderMain();}
-  else{renderTabs();renderFlights();}
+  else if(mode==='flight'){renderTabs();renderFlights();}
+  else{renderTabs();renderDocuments();}
 }
 
 function renderTabs(){
@@ -419,6 +426,71 @@ function renderFlights(){
       </div>
     </div>`;
   }).join('');
+}
+
+// ─── DOKUMENTE ───────────────────────────────────────────────────────────────
+function renderDocuments(){
+  const c=document.getElementById('mainContent');
+  const addBar=`<div style="display:flex;gap:8px;padding:12px 14px 4px;align-items:center">
+    <button onclick="document.getElementById('newDocInput').click()" style="flex:1;font-size:13px;padding:11px;border-radius:8px;background:var(--accent);color:#000;border:none;cursor:pointer;font-weight:600">📁 Dokument(e) hinzufügen</button>
+  </div>`;
+  if(!documents.length){
+    c.innerHTML=addBar+`<div class="empty">Noch keine Dokumente abgelegt</div>`;
+    return;
+  }
+  const sorted=[...documents].sort((a,b)=>(b.addedAt||'').localeCompare(a.addedAt||''));
+  c.innerHTML=addBar+sorted.map(doc=>{
+    const dt=doc.addedAt?new Date(doc.addedAt).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    return `<div class="flight-card">
+      <div class="flight-header" onclick="openDocument('${doc.id}')" style="cursor:pointer">
+        <div class="day-dot"></div>
+        <div class="flight-header-text">
+          <div class="flight-route-line" style="word-break:break-word">${escapeHtmlD(doc.name||'Dokument')}</div>
+          <div class="flight-sub">${dt}${doc.size?' · '+formatBytes(doc.size):''}</div>
+        </div>
+        <button onclick="event.stopPropagation();deleteDocument('${doc.id}')" style="font-size:13px;background:none;border:none;cursor:pointer;color:var(--warn);padding:4px 6px">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function handleNewDoc(event){
+  const files=Array.from(event.target.files||[]);
+  event.target.value='';
+  if(!files.length)return;
+  let remaining=files.length;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const id='doc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+      savePdf(id,e.target.result);
+      documents.push({id,name:file.name,addedAt:new Date().toISOString(),size:file.size,mimeType:file.type||''});
+      remaining--;
+      if(remaining===0){save();render();}
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function openDocument(id){
+  const data=await loadPdf(id);
+  if(!data){alert('Datei nicht mehr gespeichert.');return;}
+  openStoredFile(data);
+}
+
+function deleteDocument(id){
+  const doc=documents.find(d=>d.id===id);if(!doc)return;
+  if(!confirm('"'+(doc.name||'Dokument')+'" löschen?'))return;
+  deletePdf(id);
+  documents=documents.filter(d=>d.id!==id);
+  save();render();
+}
+
+function formatBytes(n){
+  if(!n)return'';
+  if(n<1024)return n+' B';
+  if(n<1024*1024)return Math.round(n/1024)+' KB';
+  return (n/1024/1024).toFixed(1)+' MB';
 }
 
 function toggleDay(h){const b=h.nextElementSibling,ch=h.querySelector('.chevron');b.classList.toggle('open');ch.classList.toggle('open');}
@@ -673,6 +745,7 @@ document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=
 // FAB label update based on mode
 document.getElementById('modeDispo').addEventListener('click',()=>document.querySelector('.fab').textContent='＋');
 document.getElementById('modeFlight').addEventListener('click',()=>document.querySelector('.fab').textContent='✈️');
+document.getElementById('modeDocs').addEventListener('click',()=>document.querySelector('.fab').textContent='📁');
 
 init();
 </script>
