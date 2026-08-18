@@ -448,6 +448,7 @@ function renderDocuments(){
           <div class="flight-route-line" style="word-break:break-word">${escapeHtmlD(doc.name||'Dokument')}</div>
           <div class="flight-sub">${dt}${doc.size?' · '+formatBytes(doc.size):''}</div>
         </div>
+        <button onclick="event.stopPropagation();renameDocument('${doc.id}')" style="font-size:13px;background:none;border:none;cursor:pointer;color:var(--text-dim);padding:4px 6px">✎</button>
         <button onclick="event.stopPropagation();deleteDocument('${doc.id}')" style="font-size:13px;background:none;border:none;cursor:pointer;color:var(--warn);padding:4px 6px">🗑</button>
       </div>
     </div>`;
@@ -483,6 +484,16 @@ function deleteDocument(id){
   if(!confirm('"'+(doc.name||'Dokument')+'" löschen?'))return;
   deletePdf(id);
   documents=documents.filter(d=>d.id!==id);
+  save();render();
+}
+
+function renameDocument(id){
+  const doc=documents.find(d=>d.id===id);if(!doc)return;
+  const name=prompt('Neuer Name:',doc.name||'');
+  if(name===null)return;
+  const trimmed=name.trim();
+  if(!trimmed)return;
+  doc.name=trimmed;
   save();render();
 }
 
