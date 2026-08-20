@@ -604,18 +604,27 @@ function uniqueName(files,name){
   while(used.has(base+' ('+i+')'+ext))i++;
   return base+' ('+i+')'+ext;
 }
-const SHARE_CSS=`:root{--bg:#0f0f0f;--surface:#1a1a1a;--surface2:#222;--border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.15);--text:#f0f0f0;--text-muted:#888;--text-dim:#555;--accent:#e8a838;--accent-bg:rgba(232,168,56,.12);--accent-border:rgba(232,168,56,.3);--warn:#e05050;--warn-bg:rgba(224,80,80,.12);--warn-border:rgba(224,80,80,.3);--ok:#4caf7d;--ok-bg:rgba(76,175,125,.12);--ok-border:rgba(76,175,125,.3);--radius:12px;--font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif}
-*{box-sizing:border-box;margin:0;padding:0}
+const SHARE_CSS=`:root{--bg:#0f0f0f;--surface:#1a1a1a;--surface2:#222;--border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.15);--text:#f0f0f0;--text-muted:#888;--text-dim:#555;--accent:#e8a838;--accent-bg:rgba(232,168,56,.12);--accent-border:rgba(232,168,56,.3);--warn:#e05050;--warn-bg:rgba(224,80,80,.12);--warn-border:rgba(224,80,80,.3);--ok:#4caf7d;--ok-bg:rgba(76,175,125,.12);--ok-border:rgba(76,175,125,.3);--today:rgba(232,168,56,.07);--today-border:rgba(232,168,56,.5);--radius:12px;--font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh}
-.app-header{padding:20px 16px 14px;border-bottom:0.5px solid var(--border)}
+.app-header{position:sticky;top:0;z-index:30;background:rgba(15,15,15,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:0.5px solid var(--border);padding:14px 16px 0}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.header-brand{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
 .header-title{font-size:20px;font-weight:600;letter-spacing:-.02em}
-.header-sub{font-size:12px;color:var(--text-muted);margin-top:4px}
+.mode-row{display:flex;gap:0;border-bottom:0.5px solid var(--border);margin-bottom:0}
+.mode-btn{flex:1;padding:10px;font-size:13px;font-weight:500;color:var(--text-muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer}
+.mode-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .main{padding:12px 12px 40px}
 .day-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
-.day-header{padding:13px 14px}
+.day-header{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;user-select:none}
+.day-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong);flex-shrink:0}
+.day-header-text{flex:1;min-width:0}
 .day-date{font-size:14px;font-weight:600}
 .day-subtitle{font-size:12px;color:var(--text-muted);margin-top:1px}
-.day-body{border-top:0.5px solid var(--border)}
+.chevron{color:var(--text-dim);font-size:18px;transition:transform .2s;flex-shrink:0}
+.chevron.open{transform:rotate(180deg)}
+.day-body{display:none;border-top:0.5px solid var(--border)}
+.day-body.open{display:block}
 .section{padding:12px 14px;border-bottom:0.5px solid var(--border)}
 .section:last-child{border-bottom:none}
 .section-label{font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px}
@@ -636,22 +645,67 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .note-item:last-child{margin-bottom:0}
 .note-dot{width:4px;height:4px;border-radius:50%;background:var(--text-dim);flex-shrink:0;margin-top:6px}
 .note-text{font-size:12.5px;color:var(--text-muted);line-height:1.45}
+.doc-row{display:flex;align-items:center;gap:12px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px;text-decoration:none;color:var(--text)}
+.doc-row:active{opacity:.7}
+.doc-icon{font-size:20px;flex-shrink:0}
+.doc-name{flex:1;font-size:13px;word-break:break-word}
+.doc-arrow{color:var(--text-dim);font-size:14px;flex-shrink:0}
 .empty{text-align:center;padding:60px 20px;color:var(--text-dim);font-size:14px}
-.footer{text-align:center;color:var(--text-dim);font-size:11px;padding:24px 16px}`;
-function buildShareHtml(dispo){
+.footer{text-align:center;color:var(--text-dim);font-size:11px;padding:20px 16px}`;
+function buildShareHtml(dispo,docEntries){
   const esc=escapeHtmlD;
-  const daysHtml=(dispo.days||[]).map(day=>{
-    const pillsHtml=(day.pills||[]).length?`<div class="pills">${day.pills.map(p=>`<span class="pill ${p.type||'neutral'}">${esc(p.label)}</span>`).join('')}</div>`:'';
-    const locHtml=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${esc(day.location.name).replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.location.maps)}">↗ Google Maps</a></div></div></div>`:'';
-    const hotelHtml=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${esc(day.hotel.name).replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.hotel.maps)}">↗ Google Maps</a></div></div></div>`:'';
-    const tlHtml=(day.timeline||[]).map(item=>`<div class="tl-item"><span class="tl-time">${esc(item.t)}</span><span class="tl-text">${esc(item.tx)}</span></div>`).join('');
-    const notesHtml=(day.notes||[]).length?`<div class="section"><div class="section-label">Hinweise</div>${day.notes.map(n=>`<div class="note-item"><div class="note-dot"></div><div class="note-text">${esc(n)}</div></div>`).join('')}</div>`:'';
-    return `<div class="day-card"><div class="day-header"><div class="day-date">${esc(day.label)}</div><div class="day-subtitle">${esc(day.subtitle||'')}</div></div><div class="day-body">${locHtml}${hotelHtml}${pillsHtml}<div class="section"><div class="section-label">Ablauf</div>${tlHtml}</div>${notesHtml}</div></div>`;
-  }).join('');
-  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(dispo.label)}</title><style>${SHARE_CSS}</style></head><body>
-<div class="app-header"><div class="header-title">${esc(dispo.label)}</div><div class="header-sub">Gruppe 5 Filmproduktion</div></div>
-<div class="main">${daysHtml||'<div class="empty">Keine Tage</div>'}</div>
+  const daysJson=JSON.stringify(dispo.days||[]).replace(/<\/script/gi,'<\\/script');
+  const docsJson=JSON.stringify(docEntries||[]).replace(/<\/script/gi,'<\\/script');
+  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"><title>${esc(dispo.label)}</title><style>${SHARE_CSS}</style></head><body>
+<div class="app-header">
+  <div class="header-top">
+    <div>
+      <div class="header-brand">Gruppe 5 Filmproduktion</div>
+      <div class="header-title">${esc(dispo.label)}</div>
+    </div>
+  </div>
+  <div class="mode-row">
+    <button class="mode-btn active" id="modeDispo" onclick="setMode('dispo')">📋 Dispo</button>
+    <button class="mode-btn" id="modeDocs" onclick="setMode('docs')">📁 Dokumente</button>
+  </div>
+</div>
+<div class="main" id="mainContent"></div>
 <div class="footer">Erstellt mit Dispo — Gruppe 5 Filmproduktion</div>
+<script type="application/json" id="dispoDays">${daysJson}<\/script>
+<script type="application/json" id="dispoDocs">${docsJson}<\/script>
+<script>
+function escapeHtmlD(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function mapsHref(url){if(!url)return url;try{const u=new URL(url);const q=u.searchParams.get('query')||u.searchParams.get('q');if(q)return 'geo:0,0?q='+encodeURIComponent(q);}catch(e){}return url;}
+const DAYS=JSON.parse(document.getElementById('dispoDays').textContent||'[]');
+const DOCS=JSON.parse(document.getElementById('dispoDocs').textContent||'[]');
+let mode='dispo';
+function setMode(m){
+  mode=m;
+  document.getElementById('modeDispo').classList.toggle('active',m==='dispo');
+  document.getElementById('modeDocs').classList.toggle('active',m==='docs');
+  render();
+}
+function toggleDay(h){const b=h.nextElementSibling,ch=h.querySelector('.chevron');b.classList.toggle('open');ch.classList.toggle('open');}
+function render(){if(mode==='dispo')renderMain();else renderDocs();}
+function renderMain(){
+  const c=document.getElementById('mainContent');
+  if(!DAYS.length){c.innerHTML='<div class="empty">Keine Tage</div>';return;}
+  c.innerHTML=DAYS.map(function(day){
+    const pillsHtml=(day.pills||[]).length?'<div class="pills">'+day.pills.map(function(p){return '<span class="pill '+(p.type||'neutral')+'">'+escapeHtmlD(p.label)+'</span>';}).join('')+'</div>':'';
+    const locHtml=day.location?'<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">'+escapeHtmlD(day.location.name).replace(/\\n/g,'<br>')+'</div><a class="maps-link" href="'+mapsHref(day.location.maps)+'">↗ Google Maps</a></div></div></div>':'';
+    const hotelHtml=day.hotel?'<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">'+escapeHtmlD(day.hotel.name).replace(/\\n/g,'<br>')+'</div><a class="maps-link" href="'+mapsHref(day.hotel.maps)+'">↗ Google Maps</a></div></div></div>':'';
+    const tlHtml=(day.timeline||[]).map(function(item){return '<div class="tl-item"><span class="tl-time">'+escapeHtmlD(item.t)+'</span><span class="tl-text">'+escapeHtmlD(item.tx)+'</span></div>';}).join('');
+    const notesHtml=(day.notes||[]).length?'<div class="section"><div class="section-label">Hinweise</div>'+day.notes.map(function(n){return '<div class="note-item"><div class="note-dot"></div><div class="note-text">'+escapeHtmlD(n)+'</div></div>';}).join('')+'</div>':'';
+    return '<div class="day-card"><div class="day-header" onclick="toggleDay(this)"><div class="day-dot"></div><div class="day-header-text"><div class="day-date">'+escapeHtmlD(day.label)+'</div><div class="day-subtitle">'+escapeHtmlD(day.subtitle||'')+'</div></div><span class="chevron">⌄</span></div><div class="day-body">'+locHtml+hotelHtml+pillsHtml+'<div class="section"><div class="section-label">Ablauf</div>'+tlHtml+'</div>'+notesHtml+'</div></div>';
+  }).join('');
+}
+function renderDocs(){
+  const c=document.getElementById('mainContent');
+  if(!DOCS.length){c.innerHTML='<div class="empty">Keine Dokumente</div>';return;}
+  c.innerHTML=DOCS.map(function(d){return '<a class="doc-row" href="'+encodeURI(d.fileName)+'" target="_blank"><span class="doc-icon">📄</span><span class="doc-name">'+escapeHtmlD(d.label)+'</span><span class="doc-arrow">→</span></a>';}).join('');
+}
+setMode('dispo');
+<\/script>
 </body></html>`;
 }
 async function shareZipBlob(blob,filename){
@@ -690,20 +744,29 @@ async function doShare(){
   const oldTxt=btn.textContent;btn.textContent='…';btn.disabled=true;
   try{
     const files=[];
-    const html=buildShareHtml(dispo);
-    files.push({name:safeName(dispo.label)+'.html',data:new TextEncoder().encode(html)});
+    const docEntries=[];
     const ownPdf=await loadPdf(dispo.id);
     if(ownPdf){
       const {bytes}=dataUrlToBytes(ownPdf);
-      files.push({name:uniqueName(files,dispo.pdfName||(safeName(dispo.label)+'.pdf')),data:bytes});
+      const fname=uniqueName(files,dispo.pdfName||(safeName(dispo.label)+'.pdf'));
+      files.push({name:fname,data:bytes});
+      docEntries.push({label:'Original-Dispo (PDF)',fileName:fname});
     }
     for(const doc of documents){
       const cb=document.getElementById('shareDoc_'+doc.id);
       if(cb&&cb.checked){
         const data=await loadPdf(doc.id);
-        if(data){const {bytes}=dataUrlToBytes(data);files.push({name:uniqueName(files,doc.name||'Dokument'),data:bytes});}
+        if(data){
+          const {bytes}=dataUrlToBytes(data);
+          const fname=uniqueName(files,doc.name||'Dokument');
+          files.push({name:fname,data:bytes});
+          docEntries.push({label:doc.name||'Dokument',fileName:fname});
+        }
       }
     }
+    const html=buildShareHtml(dispo,docEntries);
+    const htmlName=uniqueName(files,safeName(dispo.label)+'.html');
+    files.unshift({name:htmlName,data:new TextEncoder().encode(html)});
     const zipBlob=makeZip(files);
     const zipName='Dispo_'+safeName(dispo.label)+'.zip';
     closeOverlay('shareOverlay');
