@@ -308,6 +308,18 @@ function save(){
 function getActive(){return dispos.find(d=>d.id===activeId);}
 function saveKey(k){apiKey=k;localStorage.setItem('dispo_apikey',k);}
 function isToday(ds){const d=new Date(ds+'T00:00:00'),t=new Date();t.setHours(0,0,0,0);return d.getTime()===t.getTime();}
+// Wandelt einen google.com/maps-Weblink in einen geo:-Link um, der auf Android
+// direkt die Maps-App öffnet (funktioniert offline mit heruntergeladenen Karten,
+// statt erst eine Webseite zu laden).
+function mapsHref(url){
+  if(!url)return url;
+  try{
+    const u=new URL(url);
+    const q=u.searchParams.get('query')||u.searchParams.get('q');
+    if(q)return 'geo:0,0?q='+encodeURIComponent(q);
+  }catch(e){}
+  return url;
+}
 
 async function init(){
   db=await openDB().catch(()=>null);
@@ -358,8 +370,8 @@ function renderMain(){
   c.innerHTML=dispo.days.map((day,i)=>{
     const tod=isToday(day.date),open=false;
     const pillsHtml=(day.pills||[]).length?`<div class="pills">${day.pills.map(p=>`<span class="pill ${p.type||'neutral'}">${p.label}</span>`).join('')}</div>`:'';
-    const locHtml=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${day.location.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${day.location.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
-    const hotelHtml=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${day.hotel.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${day.hotel.maps}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
+    const locHtml=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${day.location.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.location.maps)}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
+    const hotelHtml=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${day.hotel.name.replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.hotel.maps)}" target="_blank">↗ Google Maps</a></div></div></div>`:'';
     const tlHtml=(day.timeline||[]).map(item=>`<div class="tl-item"><span class="tl-time">${item.t}</span><span class="tl-text">${item.tx}</span></div>`).join('');
     const notesHtml=(day.notes||[]).length?`<div class="section"><div class="section-label">Hinweise</div>${day.notes.map(n=>`<div class="note-item"><div class="note-dot"></div><div class="note-text">${n}</div></div>`).join('')}</div>`:'';
     return `<div class="day-card${tod?' today':''}">
