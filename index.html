@@ -212,6 +212,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 
+<!-- SHARE OVERLAY -->
+<div class="overlay" id="shareOverlay">
+  <div class="overlay-sheet" style="overflow-y:auto">
+    <div class="overlay-handle"></div>
+    <div class="overlay-title">Dispo teilen</div>
+    <div id="shareInfo" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5"></div>
+    <div id="shareDocList"></div>
+    <div class="overlay-btns">
+      <button class="btn btn-cancel" onclick="closeOverlay('shareOverlay')">Abbrechen</button>
+      <button class="btn btn-save" onclick="doShare()">Teilen</button>
+    </div>
+  </div>
+</div>
+
 <!-- API KEY OVERLAY -->
 <div class="overlay" id="keyOverlay">
   <div class="overlay-sheet">
@@ -353,12 +367,12 @@ function render(){
 
 function renderTabs(){
   const c=document.getElementById('dispoTabs');
-  if(mode==='flight'){c.innerHTML='';return;}
+  if(mode!=='dispo'){c.innerHTML='';return;}
   c.innerHTML=dispos.map(d=>{
     const a=d.id===activeId;
     return `<div class="tab-group">
       <div class="tab${a?' active':''}" onclick="setActive('${d.id}')">${d.label}</div>
-      ${a?`<div class="tab-actions"><button class="tab-btn del" onclick="confirmDelete('${d.id}')">🗑</button></div>`:''}
+      ${a?`<div class="tab-actions"><button class="tab-btn" onclick="openShareOverlay()" title="Teilen">📤</button><button class="tab-btn del" onclick="confirmDelete('${d.id}')">🗑</button></div>`:''}
     </div>`;
   }).join('<div style="width:0.5px;background:var(--border);margin:8px 2px 10px"></div>');
 }
@@ -516,6 +530,191 @@ function formatBytes(n){
   return (n/1024/1024).toFixed(1)+' MB';
 }
 
+// ─── TEILEN (ZIP-Export, ohne externe Bibliothek) ───────────────────────────
+const ZIP_CRC_TABLE=(()=>{
+  const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;
+})();
+function zipCrc32(bytes){
+  let c=0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++)c=ZIP_CRC_TABLE[(c^bytes[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+function zipU16(n){return [n&0xFF,(n>>8)&0xFF];}
+function zipU32(n){return [n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF];}
+function zipDosDateTime(d){
+  d=d||new Date();
+  const time=((d.getHours()&0x1F)<<11)|((d.getMinutes()&0x3F)<<5)|((d.getSeconds()>>1)&0x1F);
+  const date=(((d.getFullYear()-1980)&0x7F)<<9)|(((d.getMonth()+1)&0xF)<<5)|(d.getDate()&0x1F);
+  return {time,date};
+}
+function makeZip(files){
+  const enc=new TextEncoder();
+  const {time,date}=zipDosDateTime();
+  const chunks=[],central=[];
+  let offset=0;
+  files.forEach(f=>{
+    const nameBytes=enc.encode(f.name);
+    const data=f.data;
+    const crc=zipCrc32(data);
+    const size=data.length;
+    const lfh=new Uint8Array([
+      0x50,0x4b,0x03,0x04, 20,0, 0x00,0x08, 0,0,
+      ...zipU16(time),...zipU16(date),
+      ...zipU32(crc),...zipU32(size),...zipU32(size),
+      ...zipU16(nameBytes.length),...zipU16(0)
+    ]);
+    chunks.push(lfh,nameBytes,data);
+    central.push({nameBytes,crc,size,offset});
+    offset+=lfh.length+nameBytes.length+data.length;
+  });
+  const centralChunks=[];
+  let centralSize=0;
+  central.forEach(c=>{
+    const cdh=new Uint8Array([
+      0x50,0x4b,0x01,0x02, 20,0, 20,0, 0x00,0x08, 0,0,
+      ...zipU16(time),...zipU16(date),
+      ...zipU32(c.crc),...zipU32(c.size),...zipU32(c.size),
+      ...zipU16(c.nameBytes.length),...zipU16(0),...zipU16(0),
+      ...zipU16(0),...zipU16(0),
+      ...zipU32(0),...zipU32(c.offset)
+    ]);
+    centralChunks.push(cdh,c.nameBytes);
+    centralSize+=cdh.length+c.nameBytes.length;
+  });
+  const eocd=new Uint8Array([
+    0x50,0x4b,0x05,0x06, 0,0, 0,0,
+    ...zipU16(central.length),...zipU16(central.length),
+    ...zipU32(centralSize),...zipU32(offset),
+    0,0
+  ]);
+  return new Blob([...chunks,...centralChunks,eocd],{type:'application/zip'});
+}
+function safeName(s){
+  return String(s||'Dispo').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[\/\\:*?"<>|]/g,'_').trim().replace(/\s+/g,'_')||'Dispo';
+}
+function uniqueName(files,name){
+  const used=new Set(files.map(f=>f.name));
+  if(!used.has(name))return name;
+  const dot=name.lastIndexOf('.');
+  const base=dot>0?name.slice(0,dot):name;
+  const ext=dot>0?name.slice(dot):'';
+  let i=2;
+  while(used.has(base+' ('+i+')'+ext))i++;
+  return base+' ('+i+')'+ext;
+}
+const SHARE_CSS=`:root{--bg:#0f0f0f;--surface:#1a1a1a;--surface2:#222;--border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.15);--text:#f0f0f0;--text-muted:#888;--text-dim:#555;--accent:#e8a838;--accent-bg:rgba(232,168,56,.12);--accent-border:rgba(232,168,56,.3);--warn:#e05050;--warn-bg:rgba(224,80,80,.12);--warn-border:rgba(224,80,80,.3);--ok:#4caf7d;--ok-bg:rgba(76,175,125,.12);--ok-border:rgba(76,175,125,.3);--radius:12px;--font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh}
+.app-header{padding:20px 16px 14px;border-bottom:0.5px solid var(--border)}
+.header-title{font-size:20px;font-weight:600;letter-spacing:-.02em}
+.header-sub{font-size:12px;color:var(--text-muted);margin-top:4px}
+.main{padding:12px 12px 40px}
+.day-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
+.day-header{padding:13px 14px}
+.day-date{font-size:14px;font-weight:600}
+.day-subtitle{font-size:12px;color:var(--text-muted);margin-top:1px}
+.day-body{border-top:0.5px solid var(--border)}
+.section{padding:12px 14px;border-bottom:0.5px solid var(--border)}
+.section:last-child{border-bottom:none}
+.section-label{font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px}
+.place-row{display:flex;gap:10px;align-items:flex-start}
+.place-icon{font-size:18px;flex-shrink:0}
+.place-name{font-size:13px;line-height:1.4}
+.maps-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--accent);text-decoration:none;margin-top:5px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-bottom:0.5px solid var(--border)}
+.pill{font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border:0.5px solid var(--warn-border)}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border:0.5px solid var(--ok-border)}
+.pill.neutral{background:var(--surface2);color:var(--text-muted);border:0.5px solid var(--border)}
+.tl-item{display:flex;gap:10px;align-items:flex-start;padding:5px 0}
+.tl-item+.tl-item{border-top:0.5px solid var(--border)}
+.tl-time{font-size:11px;font-weight:500;color:var(--text-muted);min-width:44px;padding-top:1px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.tl-text{font-size:13px;line-height:1.4}
+.note-item{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+.note-item:last-child{margin-bottom:0}
+.note-dot{width:4px;height:4px;border-radius:50%;background:var(--text-dim);flex-shrink:0;margin-top:6px}
+.note-text{font-size:12.5px;color:var(--text-muted);line-height:1.45}
+.empty{text-align:center;padding:60px 20px;color:var(--text-dim);font-size:14px}
+.footer{text-align:center;color:var(--text-dim);font-size:11px;padding:24px 16px}`;
+function buildShareHtml(dispo){
+  const esc=escapeHtmlD;
+  const daysHtml=(dispo.days||[]).map(day=>{
+    const pillsHtml=(day.pills||[]).length?`<div class="pills">${day.pills.map(p=>`<span class="pill ${p.type||'neutral'}">${esc(p.label)}</span>`).join('')}</div>`:'';
+    const locHtml=day.location?`<div class="section"><div class="section-label">Drehort</div><div class="place-row"><span class="place-icon">📍</span><div><div class="place-name">${esc(day.location.name).replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.location.maps)}">↗ Google Maps</a></div></div></div>`:'';
+    const hotelHtml=day.hotel?`<div class="section"><div class="section-label">Hotel</div><div class="place-row"><span class="place-icon">🏨</span><div><div class="place-name">${esc(day.hotel.name).replace(/\n/g,'<br>')}</div><a class="maps-link" href="${mapsHref(day.hotel.maps)}">↗ Google Maps</a></div></div></div>`:'';
+    const tlHtml=(day.timeline||[]).map(item=>`<div class="tl-item"><span class="tl-time">${esc(item.t)}</span><span class="tl-text">${esc(item.tx)}</span></div>`).join('');
+    const notesHtml=(day.notes||[]).length?`<div class="section"><div class="section-label">Hinweise</div>${day.notes.map(n=>`<div class="note-item"><div class="note-dot"></div><div class="note-text">${esc(n)}</div></div>`).join('')}</div>`:'';
+    return `<div class="day-card"><div class="day-header"><div class="day-date">${esc(day.label)}</div><div class="day-subtitle">${esc(day.subtitle||'')}</div></div><div class="day-body">${locHtml}${hotelHtml}${pillsHtml}<div class="section"><div class="section-label">Ablauf</div>${tlHtml}</div>${notesHtml}</div></div>`;
+  }).join('');
+  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(dispo.label)}</title><style>${SHARE_CSS}</style></head><body>
+<div class="app-header"><div class="header-title">${esc(dispo.label)}</div><div class="header-sub">Gruppe 5 Filmproduktion</div></div>
+<div class="main">${daysHtml||'<div class="empty">Keine Tage</div>'}</div>
+<div class="footer">Erstellt mit Dispo — Gruppe 5 Filmproduktion</div>
+</body></html>`;
+}
+async function shareZipBlob(blob,filename){
+  try{
+    const file=new File([blob],filename,{type:'application/zip'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:filename});
+      return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+function openShareOverlay(){
+  const dispo=getActive();
+  if(!dispo)return;
+  document.getElementById('shareInfo').innerHTML=`<b>${escapeHtmlD(dispo.label)}</b> wird als ZIP geteilt (Übersichts-Seite${dispo.pdfName?' + Original-PDF':''}). Zusätzlich Dokumente auswählen:`;
+  const list=document.getElementById('shareDocList');
+  if(!documents.length){
+    list.innerHTML='<div style="font-size:12px;color:var(--text-dim);padding:6px 0">Keine Dokumente im Dokumente-Reiter vorhanden.</div>';
+  }else{
+    list.innerHTML=documents.map(doc=>`<label style="display:flex;align-items:center;gap:10px;padding:9px 2px;font-size:13px;border-bottom:0.5px solid var(--border)">
+      <input type="checkbox" id="shareDoc_${doc.id}" style="width:18px;height:18px;flex-shrink:0">
+      <span style="word-break:break-word">${escapeHtmlD(doc.name||'Dokument')}</span>
+    </label>`).join('');
+  }
+  document.getElementById('shareOverlay').classList.add('open');
+}
+async function doShare(){
+  const dispo=getActive();
+  if(!dispo){closeOverlay('shareOverlay');return;}
+  const btn=document.querySelector('#shareOverlay .btn-save');
+  const oldTxt=btn.textContent;btn.textContent='…';btn.disabled=true;
+  try{
+    const files=[];
+    const html=buildShareHtml(dispo);
+    files.push({name:safeName(dispo.label)+'.html',data:new TextEncoder().encode(html)});
+    const ownPdf=await loadPdf(dispo.id);
+    if(ownPdf){
+      const {bytes}=dataUrlToBytes(ownPdf);
+      files.push({name:uniqueName(files,dispo.pdfName||(safeName(dispo.label)+'.pdf')),data:bytes});
+    }
+    for(const doc of documents){
+      const cb=document.getElementById('shareDoc_'+doc.id);
+      if(cb&&cb.checked){
+        const data=await loadPdf(doc.id);
+        if(data){const {bytes}=dataUrlToBytes(data);files.push({name:uniqueName(files,doc.name||'Dokument'),data:bytes});}
+      }
+    }
+    const zipBlob=makeZip(files);
+    const zipName='Dispo_'+safeName(dispo.label)+'.zip';
+    closeOverlay('shareOverlay');
+    await shareZipBlob(zipBlob,zipName);
+  }catch(err){
+    alert('Fehler beim Teilen: '+err.message);
+  }finally{
+    btn.textContent=oldTxt;btn.disabled=false;
+  }
+}
+
 function toggleDay(h){const b=h.nextElementSibling,ch=h.querySelector('.chevron');b.classList.toggle('open');ch.classList.toggle('open');}
 function toggleFlightBody(h){const b=h.nextElementSibling,ch=h.querySelector('.chevron');b.classList.toggle('open');ch.classList.toggle('open');}
 function setActive(id){activeId=id;render();}
@@ -596,13 +795,17 @@ Regeln: location/hotel null wenn nicht vorhanden. pills für Drohne/Verbote. NIC
   reader.readAsDataURL(file);
 }
 
-function openStoredFile(dataUrl){
+function dataUrlToBytes(dataUrl){
   const m=dataUrl.match(/^data:([^;]+);base64,([\s\S]*)$/);
-  const mime=m?m[1]:'application/pdf';
+  const mime=m?m[1]:'application/octet-stream';
   const b64=m?m[2]:dataUrl.split(',')[1];
   const byteStr=atob(b64),arr=new Uint8Array(byteStr.length);
   for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
-  window.open(URL.createObjectURL(new Blob([arr],{type:mime})),'_blank');
+  return {mime,bytes:arr};
+}
+function openStoredFile(dataUrl){
+  const {mime,bytes}=dataUrlToBytes(dataUrl);
+  window.open(URL.createObjectURL(new Blob([bytes],{type:mime})),'_blank');
 }
 
 async function openPdf(){
